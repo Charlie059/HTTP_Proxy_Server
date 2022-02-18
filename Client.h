@@ -4,7 +4,7 @@
 
 #ifndef PROJECT3_CLIENT_H
 #define PROJECT3_CLIENT_H
-#define MAXDATASIZE 65535
+#define MAX_TCP_LEN 65535
 #include <iostream>
 #include <cstring>
 #include <sys/socket.h>
@@ -14,27 +14,30 @@
  * Ref: ECE650 tpc_example and beej's Notebook
  */
 class Client {
-private:
-    int socket_fd;
 public:
     int getSocketFd() const;
+private:
+    int socket_fd;
+    int errorCode;
+public:
+    int getErrorCode() const;
 
 private:
     struct addrinfo hit;
     struct addrinfo *res; // ll
     const char *hostname;
-    const char *port;
+    int port;
 public:
-    explicit Client(const char * hostname, const char * port);
-    int trySendMessage(char *message);
-    int tryRecvMessage(char *message, int mode);    // Try to receive the message on the port
-    void close();
+    explicit Client(const char * hostname, int port);
+    static int trySendMessage(char *message, int fd);
+    static int tryRecvMessage(char *message, int mode, int fd);    // Try to receive the message on the port
+    void close() const;
 protected:
     void initHit(); // init the hit
-    void getAddress(); // get the address
+    int getAddress(); // get the address
     int createSocket(); // Create a fd_socket
-    void connectSocket(); // Connect to the socket
-    void printError(std::string error) const; // Print Error
+    int connectSocket(); // Connect to the socket
+    int printError(std::string error) const; // Print Error
     static int sendall(int s, char *buf, int *len);
 
 

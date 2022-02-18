@@ -13,10 +13,13 @@
 #include <unordered_map>
 #include <sstream>
 
+
 #include "Server.h"
 #include "ProxyService.h"
 #include "HTTPRequest.h"
 #include "HTTPResponse.h"
+#include "Request.h"
+#include "Client.h"
 
 
 class ProxyService {
@@ -34,7 +37,7 @@ public:
     /**
      * Run the Demon
      */
-    [[noreturn]] void run();
+    [[noreturn]] static void run();
 
     /**
      * Write log with thread safe
@@ -50,7 +53,23 @@ public:
     static void *handle(void * request);
 
 
+    static string recvRequest(const void *req);
 
+    static int verifyRequest(const void *req, HTTPRequest &httpRequest);
+
+    static int verifyHostServer(const void *req, const Client &client);
+
+    static int handleConnect(void *req, HTTPRequest request, Client client);
+
+    static int handleGet(void *req, HTTPRequest & request, Client client);
+
+    static string recvResponse(const Client &client);
+
+    static void handleChunked(const void *req, const Client &client, string &server_msg);
+
+    static string recieveFromServer(int send_fd, char *server_msg, int mes_len, int content_len);
+
+    static int getLength(char *server_msg, int mes_len);
 };
 
 

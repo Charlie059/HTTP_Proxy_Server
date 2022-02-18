@@ -1,0 +1,19 @@
+HTTP/1.1 301 Moved Permanently
+Connection: close
+Content-Length: 0
+Server: Varnish
+Retry-After: 0
+Accept-Ranges: bytes
+Date: Tue, 15 Feb 2022 01:54:55 GMT
+Via: 1.1 varnish
+X-Served-By: cache-atl18473-ATL
+X-Cache: MISS
+X-Cache-Hits: 0
+X-Timer: S1644890095.283751,VS0,VE0
+nel: {'report_to':'default','max_age': 2592000,'include_subdomains':true,'failure_fraction':0.05}
+report-to: {'group':'default','max_age':2592000,'endpoints':[ {'url':'https://europe-west1-bbc-otg-traf-mgr-bq-prod-4591.cloudfunctions.net/report-endpoint','priority':1} ],'include_subdomains':true}
+req-svc-chain: FASTLY
+Strict-Transport-Security: max-age=31536000
+cache-control: public,max-age=604800,stale-while-revalidate=3600,stale-if-error=3600
+Location: https://www.bbc.com/
+

@@ -14,16 +14,18 @@
 
 using namespace std;
 
+//TODO WARNING DO NOT CHANGE RAW DATA
 /**
  * Find date
  */
 void HTTPResponse::parseDate(){
-    std::transform(response.begin(),response.end(),response.begin(),::tolower);
-    size_t find_date=response.find("date: ");
+    string response_temp = this->response;
+    std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
+    size_t find_date=response_temp.find("date: ");
     if(find_date!=string::npos){
-        size_t find_gmt=response.find("\r\n",find_date+1);//TODO +1
+        size_t find_gmt=response_temp.find("\r\n",find_date+1);//TODO +1
         if(find_gmt!=string::npos){
-            string datetime=response.substr(find_date+6,find_gmt-find_date-6); //TODO +6
+            string datetime=response_temp.substr(find_date+6,find_gmt-find_date-6); //TODO +6
             tm mytime;
             strptime(datetime.c_str(),"%a, %d %b %Y %H:%M:%S", &mytime);
             response_time=mktime(&mytime);
@@ -33,21 +35,22 @@ void HTTPResponse::parseDate(){
 
 // TODO May become parse cache-control in future
 void HTTPResponse::parseMax(){
-    std::transform(response.begin(),response.end(),response.begin(),::tolower);
-    size_t find_cache=response.find("cache-control: ");
+    string response_temp = this->response;
+    std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
+    size_t find_cache=response_temp.find("cache-control: ");
     if(find_cache!=string::npos) {
-        size_t end = response.find_first_of("\r\n", find_cache + 1);
+        size_t end = response_temp.find_first_of("\r\n", find_cache + 1);
         if(end!=string::npos){
-            string temp = response.substr(find_cache + CacheControlKEYWORDLEN, end - find_cache - CacheControlKEYWORDLEN);
+            string temp = response_temp.substr(find_cache + CacheControlKEYWORDLEN, end - find_cache - CacheControlKEYWORDLEN);
             size_t len=temp.size();
-            size_t find_max = response.find("max-age=",find_cache+1);
+            size_t find_max = response_temp.find("max-age=",find_cache+1);
             if (find_max != string::npos) {
-                size_t find_colon = response.find(",", find_max + 1);
+                size_t find_colon = response_temp.find(",", find_max + 1);
                 string max_age;
                 if (find_colon == string::npos) {
                     max_age=response.substr(find_max+8,len-8);
                 }
-                else max_age = response.substr(find_max + 8, find_colon - find_max - 8);// TODO the magic value; invalid use of find_colon
+                else max_age = response_temp.substr(find_max + 8, find_colon - find_max - 8);// TODO the magic value; invalid use of find_colon
                 max = atoi(max_age.c_str());
             }
         }
@@ -55,12 +58,13 @@ void HTTPResponse::parseMax(){
 }
 
 void HTTPResponse::parseExpire(){
-    std::transform(response.begin(),response.end(),response.begin(),::tolower);
-    size_t expire_pos=response.find("expires: ");
+    string response_temp = this->response;
+    std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
+    size_t expire_pos=response_temp.find("expires: ");
     if(expire_pos!=string::npos){
-        size_t find_gmt=response.find_first_of("\r\n",expire_pos+1);
+        size_t find_gmt=response_temp.find_first_of("\r\n",expire_pos+1);
         if(find_gmt!=string::npos){
-            string datetime=response.substr(expire_pos+9,find_gmt-expire_pos-9);
+            string datetime=response_temp.substr(expire_pos+9,find_gmt-expire_pos-9);
             cout<<"find_gmt: "<<find_gmt<<"  expire_pos"<<expire_pos<<endl;
             tm mytime;
             strptime(datetime.c_str(),"%a, %d %b %Y %H:%M:%S", &mytime);
@@ -71,8 +75,9 @@ void HTTPResponse::parseExpire(){
 }
 
 void HTTPResponse::parseCache(){
-    std::transform(response.begin(),response.end(),response.begin(),::tolower);
-    size_t no_cache=response.find("no-cache");
+    string response_temp = this->response;
+    std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
+    size_t no_cache=response_temp.find("no-cache");
     if(no_cache==string::npos){
         no_cache=false;
     }else{
@@ -81,7 +86,8 @@ void HTTPResponse::parseCache(){
 }
 
 void HTTPResponse::parseEtag(){
-    std::transform(response.begin(),response.end(),response.begin(),::tolower);
+    string response_temp = this->response;
+    std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
     size_t find_etag=response.find("etag: ");
     if(find_etag==string::npos){
         Etag="";
@@ -92,18 +98,34 @@ void HTTPResponse::parseEtag(){
 }
 
 void HTTPResponse::parsemodify(){
-    std::transform(response.begin(),response.end(),response.begin(),::tolower);
-    size_t find_etag=response.find("last-modified: ");
+    string response_temp = this->response;
+    std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
+    size_t find_etag=response_temp.find("last-modified: ");
     if(find_etag==string::npos) {
         last_modified="";
     }else{
-        size_t end=response.find("\r\n",find_etag+1);
-        last_modified=response.substr(find_etag+15,end-find_etag-15); // TODO fix end
+        size_t end=response_temp.find("\r\n",find_etag+1);
+        last_modified=response_temp.substr(find_etag+15,end-find_etag-15); // TODO fix end
     }
 }
 
 bool HTTPResponse::isChunked() const {
     return chunked;
+}
+
+const string &HTTPResponse::getLine() const {
+    return line;
+}
+
+//TODO find content length, ensure only set data for ContentLength or -1 and careful of find
+void HTTPResponse::parseContentLength() {
+    string response_temp = this->response;
+    std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
+
+}
+
+int HTTPResponse::getContentLength() const {
+    return content_length;
 }
 
 

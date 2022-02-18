@@ -13,9 +13,15 @@ using namespace std;
 #ifndef TCP_EXAMPLE_REQUEST_H
 #define TCP_EXAMPLE_REQUEST_H
 
+
+
 class HTTPRequest {
 private:
-    string raw;
+    const string raw;
+public:
+
+
+private:
     string host;
     string port;
     string method;
@@ -26,6 +32,8 @@ public:
         requireMethod();
         requireHostPort();
     }
+
+    string getRaw() const;
 
     string gethost(){
         return host;

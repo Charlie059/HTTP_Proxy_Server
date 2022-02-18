@@ -9,11 +9,21 @@
 #include "Server.h"
 
 Server::Server(int port) {
+    this->errorCode = 0;
     this->port = port;
     initHit(); // init the hit
-    getAddress(); // get addinfo
-    createSocket(); // Create socket
-    bindPort(); // bind the port
+    if(getAddress() == -1){
+        this->errorCode = -1; // get addinfo
+        return;
+    }
+    if(createSocket() == -1){
+        this->errorCode = -1; // Create socket
+        return;
+    }
+    if(bindPort() == -1){
+        this->errorCode = -1; // bind the port
+        return;
+    }
 }
 
 void Server::initHit() {
@@ -84,22 +94,18 @@ int Server::accept() {
     if (client_connection_fd == -1) {
         return printError("Error: cannot accept connection on socket");
     }
+    // Record the player's connection_fd
+    this->clientFd = (client_connection_fd);
 
     inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
     printf("server: got connection from %s\n", s);
 
-    // Record the player's connection_fd
-    this->currClientFd = (client_connection_fd);
-
     // Record player's ip address
     struct sockaddr_in * addr = (struct sockaddr_in *)&their_addr;
-    this->currClientIp = inet_ntoa(addr->sin_addr);
+    this->clientIp = inet_ntoa(addr->sin_addr);
     return client_connection_fd;
 }
 
-const int &Server::getBrowserFd() const {
-    return this->currClientFd;
-}
 
 void Server::close() {
     ::close(this->socket_fd);
@@ -107,7 +113,7 @@ void Server::close() {
 
 int Server::tryRecvMessage(char *message, int mode, int fd) {
     int numbytes = 0;
-    if ((numbytes = recv(fd, message, MAX_TCP_LEN - 1, mode)) == -1) {
+    if (-1 == (numbytes = recv(fd, message, MAX_TCP_LEN - 1, mode))) {
         perror("recv");
         return -1;
     }
@@ -127,24 +133,16 @@ __attribute__((unused)) int Server::getPort() const {
     return port;
 }
 
-int Server::trySendMessage(char message[MAX_TCP_LEN], int fd) {
-    int len;
-    len = strlen(message);
-    if (Server::sendall(fd, message, &len) == -1) {
-        perror("sendall");
-        printf("We only sent %d bytes because of the error!\n", len);
-        return -1;
-    }
+int Server::trySendMessage(std::string message, int fd) {
+    if (send(fd, message.c_str(), message.length(), 0)) return -1;
     return 0;
 }
 
 int Server::tryAccept() {
-    return this->currClientFd = accept();
+    return this->clientFd = accept();
 }
 
-const std::string &Server::getCurrBrowserIp() const {
-    return currClientIp;
-}
+
 
 /**
  * Static Helper funcion send all message
@@ -153,7 +151,7 @@ const std::string &Server::getCurrBrowserIp() const {
  * @param len
  * @return
  */
- int Server::sendall(int s, char *buf, int *len)
+__attribute__((unused)) int Server::sendall(int s, const char *buf, int *len)
 {
     int total = 0;
     int bytesleft = *len;
@@ -169,4 +167,16 @@ const std::string &Server::getCurrBrowserIp() const {
     *len = total;
 
     return n==-1?-1:0;
+}
+
+int Server::getErrorCode() const {
+    return errorCode;
+}
+
+int Server::getClientFd() const {
+    return clientFd;
+}
+
+const std::string &Server::getClientIp() const {
+    return clientIp;
 }

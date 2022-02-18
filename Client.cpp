@@ -6,13 +6,23 @@
  */
 #include "Client.h"
 
-Client::Client(const char * hostname, const char *port) {
+Client::Client(const char * hostname, int port) {
+    this->errorCode = 0;
     this->port = port;
     this->hostname = hostname;
     initHit();
-    getAddress();
-    createSocket();
-    connectSocket();
+    if(getAddress() == -1){
+        this->errorCode = -1;
+        return;
+    }
+    if(createSocket() == -1){
+        this->errorCode = -1;
+        return;
+    }
+    if(connectSocket() == -1){
+        this->errorCode = -1;
+        return;
+    }
     freeaddrinfo(this->res);
 }
 
@@ -22,32 +32,30 @@ void Client::initHit() {
     this->hit.ai_socktype = SOCK_STREAM;
 }
 
-void Client::getAddress() {
-    if(getaddrinfo(this->hostname, this->port, &this->hit, &this->res) != 0) printError("Error: cannot get address info for host");
+int Client::getAddress() {
+    if(getaddrinfo(this->hostname, std::to_string(this->port).c_str(), &this->hit, &this->res) != 0) return printError("Error: cannot get address info for host");
+    return 0;
 }
 
 int Client::createSocket() {
     this->socket_fd = socket(this->res->ai_family, this->res->ai_socktype, this->res->ai_protocol);
-    if(this->socket_fd == -1){
-        printError("Error: cannot create socket");
-        return -1;
-    }
+    if(this->socket_fd == -1) return printError("Error: cannot create socket");
     return 0;
 }
 
-void Client::connectSocket() {
-    if (connect(this->socket_fd, this->res->ai_addr, this->res->ai_addrlen) == -1) printError("Error: cannot connect to socket");
+int Client::connectSocket() {
+    if (connect(this->socket_fd, this->res->ai_addr, this->res->ai_addrlen) == -1) return printError("Error: cannot connect to socket");
+    return 0;
 }
 
-void Client::printError(std::string error) const {
-    std::cerr << error << std::endl;
-    std::cerr << "  (" << hostname << "," << port << ")" << std::endl;
-    exit(EXIT_FAILURE);
+int Client::printError(std::string error) const {
+    std::cerr << "(no-id):  " <<  error << std::endl;
+    return -1;
 }
 
-int Client::tryRecvMessage(char *message, int mode) {
+int Client::tryRecvMessage(char *message, int mode, int fd) {
     int numbytes = 0;
-    if ((numbytes = recv(this->socket_fd, message, MAXDATASIZE - 1, mode)) == -1) {
+    if ((numbytes = recv(fd, message, MAX_TCP_LEN - 1, mode)) == -1) {
         perror("recv");
         return -1;
     }
@@ -55,10 +63,10 @@ int Client::tryRecvMessage(char *message, int mode) {
     return numbytes;
 }
 
-int Client::trySendMessage(char message[MAXDATASIZE]) {
+int Client::trySendMessage(char message[MAX_TCP_LEN], int fd) {
     int len;
     len = strlen(message);
-    if (sendall(this->socket_fd, message, &len) == -1) {
+    if (sendall(fd, message, &len) == -1) {
         perror("sendall");
         printf("We only sent %d bytes because of the error!\n", len);
         return -1;
@@ -93,11 +101,15 @@ int Client::sendall(int s, char *buf, int *len)
 }
 
 
-void Client::close() {
+void Client::close() const {
     ::close(this->socket_fd);
 }
 
 int Client::getSocketFd() const {
     return socket_fd;
+}
+
+int Client::getErrorCode() const {
+    return errorCode;
 }
 

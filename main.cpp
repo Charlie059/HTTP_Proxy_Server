@@ -1,8 +1,7 @@
 #include <iostream>
+#include "ProxyService.h"
 
-//#include "ProxyService.h"
-
-#define DEBUG_MODE
+//#define DEBUG_MODE
 #ifdef DEBUG_MODE
 #include "gtest/gtest.h"
 #endif

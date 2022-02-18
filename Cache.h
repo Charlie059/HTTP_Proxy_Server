@@ -10,7 +10,6 @@
 #include <unordered_map>
 using namespace std;
 
-
 // Def the double linked node
 struct ListNode{
     std::string key; // Define the key for the url

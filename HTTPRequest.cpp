@@ -19,7 +19,7 @@ void HTTPRequest::requireHostPort(){
     //find the first index where "Host" appears
     size_t find_host=raw.find("Host: "); //TODO size_t -1
     if(find_host!=string::npos){
-        string temp=raw.substr(find_host+6);
+        string temp=raw_temp.substr(find_host+6);
         //find the first index where \r or \n appears
         size_t host_end=temp.find_first_of("\r\n"); //TODO size_t -1
         if(host_end!=string::npos){
@@ -32,6 +32,7 @@ void HTTPRequest::requireHostPort(){
                     //truncate the port number
                     host=host_temp.substr(0,colon); //TODO size_t -1
                     port=host_temp.substr(colon+1);
+                    if(port.empty()) port="80";
                 }
                 else{
                     host=host_temp;
@@ -61,6 +62,10 @@ void HTTPRequest::requireMethod(){ // TODO Change find CONNECT GRT POST directly
     else{
         method="";
     }
+}
+
+string HTTPRequest::getRaw() const {
+    return raw;
 }
 
 //
