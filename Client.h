@@ -31,6 +31,7 @@ public:
     explicit Client(const char * hostname, int port);
     static int trySendMessage(char *message, int fd);
     static int tryRecvMessage(char *message, int mode, int fd);    // Try to receive the message on the port
+    static int recvMessage(int fd, void * message, int length);
     void close() const;
 protected:
     void initHit(); // init the hit

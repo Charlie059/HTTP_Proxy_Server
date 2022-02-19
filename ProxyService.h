@@ -67,9 +67,14 @@ public:
 
     static void handleChunked(const void *req, const Client &client, string &server_msg);
 
+    //TODO del
+//    static string recvAllResponse(Client client, char *server_msg,int headLength,  int contentLength);
+    static int getLength(char *server_msg, int mes_len);
     static string recieveFromServer(int send_fd, char *server_msg, int mes_len, int content_len);
 
-    static int getLength(char *server_msg, int mes_len);
+
+
+    static string recvAllResponse(Client client, string server_meg, int contentLength);
 };
 
 

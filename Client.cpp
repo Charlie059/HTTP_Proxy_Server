@@ -113,3 +113,7 @@ int Client::getErrorCode() const {
     return errorCode;
 }
 
+int Client::recvMessage(int fd, void *message, int length) {
+    return recv(fd, message, length, 0);
+}
+

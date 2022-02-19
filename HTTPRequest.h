@@ -18,8 +18,6 @@ using namespace std;
 class HTTPRequest {
 private:
     const string raw;
-public:
-
 
 private:
     string host;

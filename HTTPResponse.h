@@ -31,9 +31,7 @@ private:
 public:
     const string &getLine() const;
     bool isChunked() const;
-private:
-    int max;
-    int content_length;
+
 public:
     int getContentLength() const;
 
@@ -44,6 +42,8 @@ private:
     bool no_cache;
     bool chunked;
     const string response;
+    int max;
+    int content_length;
 
 protected:
     void parseDate();
@@ -62,6 +62,7 @@ public:
         parseCache();
         parseEtag();
         parsemodify();
+        parseContentLength();
         isChunk();
     }
 
