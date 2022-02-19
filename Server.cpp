@@ -98,7 +98,6 @@ int Server::accept() {
     this->clientFd = (client_connection_fd);
 
     inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
-    printf("server: got connection from %s\n", s);
 
     // Record player's ip address
     struct sockaddr_in * addr = (struct sockaddr_in *)&their_addr;

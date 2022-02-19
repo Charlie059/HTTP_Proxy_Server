@@ -9,7 +9,7 @@
 
 pthread_mutex_t mutex_lock = PTHREAD_MUTEX_INITIALIZER;
 std::ofstream logFile("proxy.log"); // TODO change back
-Cache cache(5);
+Cache cache(100);
 
 [[noreturn]] void ProxyService::run() {
     // Build Server and let it listen port eg: 12345
@@ -47,20 +47,37 @@ void * ProxyService::handle(void * req) {
     // Parse the request info
     HTTPRequest httpRequest(requestContent);
 
-    // verifyRequest TODO return 400 Bad request
+    // verifyRequest
     if(verifyRequest(req, httpRequest) == -1) return nullptr;
 
     // Connect to the Server
     Client client(httpRequest.gethost().c_str(), stoi(httpRequest.getport()));
     if(verifyHostServer(req, client) == -1) return nullptr;
 
-
     // If current client request HEAD is CONNECT
     if(httpRequest.getmethod() == "CONNECT"){
-        // do CONNECT stuff
         handleConnect(req, httpRequest, client);
     }
     else{ // else if POST or GET
+
+        // TODO TEST
+        if(!cache.get(httpRequest.getline()).empty()){
+            vector<char> response = cache.get(httpRequest.getline());
+            const char * send_msg = response.data();
+
+            send(((Request*)req)->getFd(), send_msg, response.size(), 0);
+            // Close Connection
+            //close(((Request*)req)->getFd()); // close client connection
+            //cout << "USE CACHE" << endl;
+            handleGet(req,httpRequest,client);
+            //return nullptr;
+        }else{
+
+        }
+        cout << "NO USE CACHE" << endl;
+        // TODO TEST END
+
+
         if(handleGet(req, httpRequest, client) == -1){
             //TODO log ERROR
             close(((Request*)req)->getFd()); // close client connection
@@ -155,8 +172,8 @@ void ProxyService::writeLog(const std::string& logTo){
 }
 
 
-/**
- * Handle Connect TODO
+/** TODO change in future
+ * Handle Connect
  * @param req
  * @param request
  * @param client
@@ -186,7 +203,7 @@ int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
     if((server_msg = recvResponse(client)).empty()) return -1;
 
     // HTTPResponse parse and log
-    HTTPResponse httpResponse(server_msg);
+    HTTPResponse httpResponse(server_msg); // TODO when call this HTTPResponse, assign a current time
     writeLog(to_string(((Request*)req)->getRequestId())+": HTTPResponse \"" + httpResponse.getLine()  + Time::getCurrentTime());
 
     // TODO cache
@@ -197,21 +214,23 @@ int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
     } else{
         // get the content length
         int content_len = httpResponse.getContentLength();
-//        if(content_len != -1){
-            std::string msg = recvAllResponse(client, server_msg, content_len);
-            std::vector<char> response_msg(msg.begin(), msg.end());
-            const char * send_msg = response_msg.data();
-            send(((Request*)req)->getFd(), send_msg, response_msg.size(), 0);
+        std::string msg = recvAllResponse(client, server_msg, content_len);
+        std::vector<char> response_msg(msg.begin(), msg.end());
+        const char * send_msg = response_msg.data();
+        send(((Request*)req)->getFd(), send_msg, response_msg.size(), 0);
 
+
+        // TODO HTTPResponse::isCacheable()
+        if(httpResponse.isCacheable() && request.getmethod() != "POST"){
             // Cache the Response
             cache.put(request.getline(), response_msg);
-//            vector<char> res = cache.get(request.getline());
+            // log info
+            string logInfo = to_string(((Request*)req)->getRequestId())+": Cached \"" + httpResponse.getLine()  + Time::getCurrentTime();
+            writeLog(logInfo);
+        }
+            //TODO httpResponse.set_response_raw_data
+            //TODO cache value -> httpResponse
 
-//        } else{
-//            send(((Request*)req)->getFd(), server_msg.c_str(), server_msg.length(), 0);
-//            // Cache the Response
-//            cache.put(request.getline(), std::vector<char>(server_msg.begin(), server_msg.end()));
-//        }
         return 0;
     }
 
@@ -221,7 +240,7 @@ int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
 
 //TODO MAY change in future
 /**
- * Base on the content-length fild
+ * Base on the content-length field
  * @param client
  * @param server_msg
  * @param mes_len
@@ -236,7 +255,7 @@ string ProxyService::recvAllResponse(Client client, string server_meg, int conte
     std::string recv_msg_str(server_meg_char, curr_len);
     while(curr_len < contentLength) {
         char recv_msg[65536] = {0};
-        if ((len = ( Client::recvMessage(client.getSocketFd(), recv_msg, sizeof(recv_msg))))  <= 0) break;
+        if ((len = (Client::recvMessage(client.getSocketFd(), recv_msg, sizeof(recv_msg))))  <= 0) break;
         std::string temp(recv_msg, len);
         recv_msg_str += temp;
         curr_len += len;
@@ -271,46 +290,4 @@ string ProxyService::recvResponse(const Client &client) {
         return {};
     }
     return string(server_msg, server_msg_len);
-}
-
-//TODO del
-std::string ProxyService::recieveFromServer(int send_fd,
-                                            char * server_msg,
-                                            int mes_len,
-                                            int content_len) {
-    int total_len = 0;
-    int len = 0;
-    std::string msg(server_msg, mes_len);
-
-    while (total_len < content_len) {
-        char new_server_msg[65536] = {0};
-        if ((len = recv(send_fd, new_server_msg, sizeof(new_server_msg), 0)) <= 0) {
-            break;
-        }
-        std::string temp(new_server_msg, len);
-        msg += temp;
-        total_len += len;
-    }
-    return msg;
-}
-
-//TODO del
-int ProxyService::getLength(char * server_msg, int mes_len) {
-
-    std::string msg(server_msg, mes_len);
-    std::transform(msg.begin(),msg.end(),msg.begin(),::tolower);
-    size_t pos;
-    if ((pos = msg.find("content-length: ")) != std::string::npos) {
-        size_t head_end = msg.find("\r\n\r\n");
-
-        int part_body_len = mes_len - static_cast<int>(head_end) - 8;
-        size_t end = msg.find("\r\n", pos);
-        std::string content_len = msg.substr(pos + 16, end - pos - 16);
-        int num = 0;
-        for (size_t i = 0; i < content_len.length(); i++) {
-            num = num * 10 + (content_len[i] - '0');
-        }
-        return num - part_body_len - 4;
-    }
-    return -1;
 }

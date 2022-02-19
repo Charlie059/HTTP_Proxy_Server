@@ -19,31 +19,42 @@
 #include <functional>
 #include <iostream>
 #include <string>
+#include <vector>
 #include "algorithm"
 
 // TODO not every thing is public
 using namespace std;
 
 class HTTPResponse{
-private:
-    string Etag;
-    string line;
 public:
+    const vector<char> &getResponseRawData() const;
+    void setResponseRawData(const vector<char> &responseRawData);
+    int getContentLength() const;
     const string &getLine() const;
     bool isChunked() const;
+    bool isNoCache() const;
+    bool isNoStore() const;
+    bool isPrivate() const;
 
-public:
-    int getContentLength() const;
+/**
+ * if response find no-store and private return false else return true
+ * @return if can be store in the cache
+ */
+    bool isCacheable();
 
 private:
+    int max;
+    int content_length;
+    string Etag;
+    string line;
     string last_modified;
     time_t expire_time;
     time_t response_time;
     bool no_cache;
     bool chunked;
     const string response;
-    int max;
-    int content_length;
+    std::vector<char> response_raw_data;
+    void isChunk();
 
 protected:
     void parseDate();
@@ -53,9 +64,11 @@ protected:
     void parseEtag();
     void parsemodify();
     void parseContentLength();
+    void setRecvTime();
 
 public:
-    HTTPResponse(string response): response(response) {
+    HTTPResponse(string response): response(response), response_raw_data({}) {
+        setRecvTime();
         parseDate();
         parseMax();
         parseExpire();
@@ -67,41 +80,15 @@ public:
     }
 
 
-    // TODO send to the .cpp file
-    void isChunk() {
-        size_t pos;
-        if ((pos = this->response.find("chunked")) != std::string::npos) {
-            this->chunked = true;
-            return;
-        }
-        else this->chunked = false;
-    }
+
+
 
 
     /**
      * Build the HTTP Response, eg 400 BAD REQUEST
      * @return string for messgae
      */
-    static string buildResponse(int HTTPCODE){
-        switch (HTTPCODE) {
-            case 200:
-                return "HTTP/1.1 200 OK\n"
-                       "Content-Type: application/json; charset=UTF-8\n"
-                       "Content-Length: 0\n"
-                       "\r\n";
-            case 400:
-                return "HTTP/1.1 400 Bad Request\n"
-                       "Content-Type: application/json; charset=UTF-8\n"
-                       "Content-Length: 0\n"
-                       "\r\n";
-            default:
-                return "HTTP/1.1 400 Bad Request\n"
-                       "Content-Type: application/json; charset=UTF-8\n"
-                       "Content-Length: 0\n"
-                       "\r\n";
-        }
-    }
-
+    static string buildResponse(int HTTPCODE);
 
 };
 

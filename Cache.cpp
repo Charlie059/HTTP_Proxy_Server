@@ -5,7 +5,7 @@
 #include "Cache.h"
 
 /**
- * Get the key
+ * Get the response by key
  * @param key of the url
  * @return {} when not found, or return response
  */

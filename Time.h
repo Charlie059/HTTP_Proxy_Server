@@ -20,6 +20,14 @@ static string getCurrentTime(){
     return currentTime;
 }
 
+    static time_t getCurrentTm(){
+        time_t now = time(0);
+        tm *tm_gmt=gmtime(&now);
+        time_t time2=mktime(tm_gmt);
+        return time2;
+    }
+
+
 };
 
 

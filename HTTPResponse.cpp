@@ -2,6 +2,7 @@
 // Created by HP on 2022/2/14.
 //
 #include "HTTPResponse.h"
+#include "Time.h"
 #include <ctime>
 #include <time.h>
 #include <fstream>
@@ -10,6 +11,15 @@
 //#define DEBUG_MODE
 #ifdef DEBUG_MODE
 #include "gtest/gtest.h"
+// Test case 1:
+TEST(HTTPResponseTest, test1){
+    std::ifstream f("/Users/xg/CLionProjects/http-caching-proxy/Examples/response3.txt");
+    std::stringstream reader;
+    reader << f.rdbuf();
+    HTTPResponse reqs(reader.str());
+    EXPECT_EQ(false,reqs.isNoStore());
+}
+
 #endif
 
 using namespace std;
@@ -64,8 +74,7 @@ void HTTPResponse::parseExpire(){
     if(expire_pos!=string::npos){
         size_t find_gmt=response_temp.find_first_of("\r\n",expire_pos+1);
         if(find_gmt!=string::npos){
-            string datetime=response_temp.substr(expire_pos+9,find_gmt-expire_pos-9);
-            cout<<"find_gmt: "<<find_gmt<<"  expire_pos"<<expire_pos<<endl;
+            string datetime=response_temp.substr(expire_pos+9,find_gmt-expire_pos-9); // TODO the magic value; invalid use of find_colon
             tm mytime;
             strptime(datetime.c_str(),"%a, %d %b %Y %H:%M:%S", &mytime);
             expire_time=mktime(&mytime);
@@ -129,16 +138,53 @@ int HTTPResponse::getContentLength() const {
 }
 
 
+string HTTPResponse::buildResponse(int HTTPCODE){
+    switch (HTTPCODE) {
+        case 200:
+            return "HTTP/1.1 200 OK\n"
+                   "Content-Type: application/json; charset=UTF-8\n"
+                   "Content-Length: 0\n"
+                   "\r\n";
+        case 400:
+            return "HTTP/1.1 400 Bad Request\n"
+                   "Content-Type: application/json; charset=UTF-8\n"
+                   "Content-Length: 0\n"
+                   "\r\n";
+        default:
+            return "HTTP/1.1 400 Bad Request\n"
+                   "Content-Type: application/json; charset=UTF-8\n"
+                   "Content-Length: 0\n"
+                   "\r\n";
+    }
+}
+
+bool HTTPResponse::isNoCache() const {
+    return no_cache;
+}
+
+bool HTTPResponse::isNoStore() const {
+    return no_store;
+}
+
+bool HTTPResponse::isPrivate() const {
+    return is_private;
+}
+
+bool HTTPResponse::isCacheable() {
+    if(this->isNoStore() == true || this->isPrivate() == true) return false;
+    else return true;
+}
+
+void HTTPResponse::setRecvTime() {
+    Time t;
+    this->recv_time = t.getCurrentTm();
+}
+
+time_t HTTPResponse::getRecvTime() const {
+    return recv_time;
+}
 
 
-//// Test case 1:
-//TEST(HTTPResponseTest, test1){
-//    std::ifstream f("/Users/xg/CLionProjects/http-caching-proxy/Examples/response1.txt");
-//    std::stringstream reader;
-//    reader << f.rdbuf();
-//    HTTPResponse reqs(reader.str());
-//    EXPECT_STREQ("Mon, 21 Feb 2022 21:05:37",asctime(gmtime(&reqs.expire_time)));
-//}
 
 
 
