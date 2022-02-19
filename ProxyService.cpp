@@ -5,9 +5,11 @@
 #include "ProxyService.h"
 #include "Client.h"
 #include "Time.h"
+#include "Cache.h"
 
 pthread_mutex_t mutex_lock = PTHREAD_MUTEX_INITIALIZER;
 std::ofstream logFile("proxy.log"); // TODO change back
+Cache cache(5);
 
 [[noreturn]] void ProxyService::run() {
     // Build Server and let it listen port eg: 12345
@@ -51,6 +53,7 @@ void * ProxyService::handle(void * req) {
     // Connect to the Server
     Client client(httpRequest.gethost().c_str(), stoi(httpRequest.getport()));
     if(verifyHostServer(req, client) == -1) return nullptr;
+
 
     // If current client request HEAD is CONNECT
     if(httpRequest.getmethod() == "CONNECT"){
@@ -194,27 +197,21 @@ int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
     } else{
         // get the content length
         int content_len = httpResponse.getContentLength();
-//        int content_len = getLength(const_cast<char *>(server_msg.c_str()), server_msg.length());  //get content length
-        if(content_len != -1){
-//            std::string msg = recvAllResponse(client, const_cast<char *>(server_msg.c_str()), server_msg.length(), content_len);
+//        if(content_len != -1){
             std::string msg = recvAllResponse(client, server_msg, content_len);
-//            std::string msg = recieveFromServer(client.getSocketFd(), const_cast<char *>(server_msg.c_str()), server_msg.length(), content_len);
-//            std::vector<char> large_msg;
-//            for (size_t i = 0; i < msg.length(); i++) {
-//                large_msg.push_back(msg[i]);
-//            }
-//            const char * send_msg = large_msg.data();
-//            send(((Request*)req)->getFd(), send_msg, msg.length(), 0);
+            std::vector<char> response_msg(msg.begin(), msg.end());
+            const char * send_msg = response_msg.data();
+            send(((Request*)req)->getFd(), send_msg, response_msg.size(), 0);
 
-            std::vector<char> large_msg(msg.begin(), msg.end());
-            const char * send_msg = large_msg.data();
-            send(((Request*)req)->getFd(), send_msg, large_msg.size(), 0);
-        } else{
-            send(((Request*)req)->getFd(), server_msg.c_str(), server_msg.length(), 0);
-        }
+            // Cache the Response
+            cache.put(request.getline(), response_msg);
+//            vector<char> res = cache.get(request.getline());
 
-        // Cache the Response
-
+//        } else{
+//            send(((Request*)req)->getFd(), server_msg.c_str(), server_msg.length(), 0);
+//            // Cache the Response
+//            cache.put(request.getline(), std::vector<char>(server_msg.begin(), server_msg.end()));
+//        }
         return 0;
     }
 
@@ -231,19 +228,6 @@ int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
  * @param contentLength
  * @return
  */
-//string ProxyService::recvAllResponse(Client client, char * server_msg, int headLength, int contentLength) {
-//    int curr_len = headLength;
-//    int len = 0;
-//    std::string recv_msg_str(server_msg, curr_len);
-//    while(curr_len < contentLength) {
-//        char recv_msg[65536] = {0};
-//        if ((len = ( Client::recvMessage(client.getSocketFd(), recv_msg, sizeof(recv_msg))))  <= 0) break;
-//        std::string temp(recv_msg, len);
-//        recv_msg_str += temp;
-//        curr_len += len;
-//    }
-//    return recv_msg_str;
-//}
 
 string ProxyService::recvAllResponse(Client client, string server_meg, int contentLength) {
     char * server_meg_char = const_cast<char *>(server_meg.c_str());

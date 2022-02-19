@@ -25,6 +25,7 @@ private:
     string method;
     void requireHostPort();
     void requireMethod();
+    void requireline();
 public:
     HTTPRequest(string request): raw(request){
         requireMethod();
