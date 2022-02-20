@@ -51,7 +51,7 @@ void * ProxyService::handle(void * req) {
     if(verifyRequest(req, httpRequest) == -1) return nullptr;
 
     // Connect to the Server
-    Client client(httpRequest.gethost().c_str(), stoi(httpRequest.getport()));
+    Client client(httpRequest.gethost().c_str(), stoi(httpRequest.getport()));//TODO stoi catch
     if(verifyHostServer(req, client) == -1) return nullptr;
 
     // If current client request HEAD is CONNECT
@@ -59,37 +59,105 @@ void * ProxyService::handle(void * req) {
         handleConnect(req, httpRequest, client);
     }
     else{ // else if POST or GET
-
         // TODO TEST
-        if(!cache.get(httpRequest.getline()).empty()){
-            vector<char> response = cache.get(httpRequest.getline());
-            const char * send_msg = response.data();
 
-            send(((Request*)req)->getFd(), send_msg, response.size(), 0);
-            // Close Connection
-            //close(((Request*)req)->getFd()); // close client connection
-            //cout << "USE CACHE" << endl;
-            handleGet(req,httpRequest,client);
-            //return nullptr;
-        }else{
+        // if find in cache
+        if(!cache.get(httpRequest.getline()).first.empty()){
+            vector<char> response = cache.get(httpRequest.getline()).first; // get the full response
+            time_t recv_time = cache.get(httpRequest.getline()).second; // get the recv_time
+            std::string response_str(response.begin(), response.end());
+            HTTPResponse parse(response_str);
 
-        }
-        cout << "NO USE CACHE" << endl;
-        // TODO TEST END
+            // if the response is no-cache
+            if(parse.isNoCache()){
+                bool result = revalidate(httpRequest, parse, client);
+                if(result == true){ //use cache
+                    // log use cache
+                    writeLog("Use Cache with " + httpRequest.getline());
+                    // return response to client
+                    const char * send_msg = response.data();
+                    send(((Request*)req)->getFd(), send_msg, response.size(), 0);
+                    close(((Request*)req)->getFd()); // close client connection
+                    return nullptr;
+                }else{
+                    handleGet(req, httpRequest, client);
+                }
+            }else{
+                if(isFresh(recv_time, parse)){//checkFresh()
+                    // log use cache
+                    writeLog("Use Cache with " + httpRequest.getline());
+                    const char * send_msg = response.data();
+                    send(((Request*)req)->getFd(), send_msg, response.size(), 0);
+                    close(((Request*)req)->getFd()); // close client connection
+                    return nullptr;
+                } else{
+                    handleGet(req, httpRequest, client);
+                }
+            }
+            close(((Request*)req)->getFd()); // close client connection
+            client.close(); // close the server connnection
+            return nullptr;
 
-
-        if(handleGet(req, httpRequest, client) == -1){
-            //TODO log ERROR
+        }else{ // if not found in cache
+            handleGet(req, httpRequest, client);
             close(((Request*)req)->getFd()); // close client connection
             client.close();
             return nullptr;
         }
+
+        // TODO TEST END
+
     }
 
     // Close Connection
     close(((Request*)req)->getFd()); // close client connection
     client.close();
     return nullptr;
+}
+
+/**
+ * find if the cache is fresh
+ * @param recv_time
+ * @param parse
+ * @return true is fresh
+ */
+bool ProxyService::isFresh(time_t recv_time, const HTTPResponse &parse) {
+    int currAge = Time::getCurrentTm() - recv_time;
+    if(parse.getSMaxAge() != -1){
+        return parse.getSMaxAge() > currAge;
+    }else if(parse.getMaxAge() != -1){
+        return parse.getMaxAge() > currAge;
+    }else if(parse.getExpireTime() != 0){
+        return difftime(parse.getExpireTime(), Time::getCurrentTm()) > 0;
+    } else{
+        // Set estimate lift-time
+        return 150 > currAge;
+    }
+}
+
+/**
+ * Revalidate the httpRequest
+ * @param httpRequest
+ * @param parse
+ * @return
+ */
+bool ProxyService::revalidate(HTTPRequest &httpRequest, const HTTPResponse &parse, Client & client) {
+    string msg_to_send;
+    if(!parse.getEtag().empty() && !parse.getLastModified().empty()){ //if etag and last-modified both exist
+        msg_to_send = HTTPRequest::buildHTTPRequest(httpRequest.getline(), true, true, parse.getEtag(), parse.getLastModified());
+    } else if(!parse.getEtag().empty() && parse.getLastModified().empty()){ // if has ETag and no LastModified
+        msg_to_send = HTTPRequest::buildHTTPRequest(httpRequest.getline(), true, false, parse.getEtag(), "");
+    } else if(parse.getEtag().empty() && !parse.getLastModified().empty()) { // if does not have ETag and have LastModified
+        msg_to_send = HTTPRequest::buildHTTPRequest(httpRequest.getline(), false, true, "", parse.getLastModified());
+    } else{
+        return false;
+    }
+    // send message to server
+    Client::trySendMessage(const_cast<char *>(msg_to_send.c_str()), client.getSocketFd());
+    // recv message from server
+    string res = recvResponse(client);
+    if(HTTPResponse::findNotModified(res)) return true; // use cache
+    else return false;
 }
 
 /**
@@ -193,6 +261,8 @@ int ProxyService::handleConnect(void *req, HTTPRequest request, Client client) {
  */
 int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
     // send message to the server
+
+    // TODO TEST
     if(Client::trySendMessage(const_cast<char *>(request.getRaw().c_str()), client.getSocketFd()) == -1) return -1;
 
     // log the request to the server
@@ -223,7 +293,7 @@ int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
         // TODO HTTPResponse::isCacheable()
         if(httpResponse.isCacheable() && request.getmethod() != "POST"){
             // Cache the Response
-            cache.put(request.getline(), response_msg);
+            cache.put(request.getline(), std::make_pair(response_msg, httpResponse.getRecvTime()));
             // log info
             string logInfo = to_string(((Request*)req)->getRequestId())+": Cached \"" + httpResponse.getLine()  + Time::getCurrentTime();
             writeLog(logInfo);

@@ -68,6 +68,10 @@ public:
     static void handleChunked(const void *req, const Client &client, string &server_msg);
 
     static string recvAllResponse(Client client, string server_meg, int contentLength);
+
+    static bool revalidate(HTTPRequest &httpRequest, const HTTPResponse &parse, Client & client);
+
+    static bool isFresh(time_t recv_time, const HTTPResponse &parse);
 };
 
 

@@ -13,11 +13,11 @@ using namespace std;
 // Def the double linked node
 struct ListNode{
     std::string key; // Define the key for the url
-    std::vector<char> response; // Define the HTTP Response
+    std::pair<std::vector<char>, time_t> response;
     ListNode * prev;
     ListNode * next;
     ListNode():key(""), response({}),prev(nullptr), next(nullptr){} // default constructor
-    ListNode(string key, vector<char> response): key(key), response(response), prev(nullptr), next(nullptr){}
+    ListNode(string key, std::pair<std::vector<char>, time_t> response): key(key), response(response), prev(nullptr), next(nullptr){}
 
 };
 
@@ -70,7 +70,7 @@ public:
      * @param key of the url
      * @return {} when not found, or return response
      */
-    std::vector<char> get(string key);
+    std::pair<std::vector<char>, time_t> get(string key);
 
 
 
@@ -79,7 +79,7 @@ public:
      * @param key url
      * @param response
      */
-    void put(string key,vector<char> response);
+    void put(string key,std::pair<std::vector<char>, time_t> response);
 
 
 };

@@ -9,7 +9,7 @@
  * @param key of the url
  * @return {} when not found, or return response
  */
-std::vector<char> Cache::get(string key){
+std::pair<std::vector<char>, time_t> Cache::get(string key){
     // if not found in the cache(hash map) return empty {}
     if(!cache.count(key)){
         return {};
@@ -48,7 +48,7 @@ void Cache::add2Head(ListNode *pNode) {
      * @param key url
      * @param response
      */
-void Cache::put(string key,vector<char> response){
+void Cache::put(string key,std::pair<std::vector<char>, time_t> response){
     // if the key is not in the cache
     if(!cache.count(key)){
         this->size++; // increase the size

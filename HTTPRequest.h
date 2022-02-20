@@ -43,6 +43,8 @@ public:
     string getmethod(){
         return method;
     }
+
+    static string buildHTTPRequest(string headerLine, bool IfNoneMatch, bool IfModifiedSince, string Etag, string LastModified);
 };
 
 

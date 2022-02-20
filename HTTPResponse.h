@@ -27,8 +27,6 @@ using namespace std;
 
 class HTTPResponse{
 public:
-    const vector<char> &getResponseRawData() const;
-    void setResponseRawData(const vector<char> &responseRawData);
     int getContentLength() const;
     const string &getLine() const;
     bool isChunked() const;
@@ -43,22 +41,37 @@ public:
     bool isCacheable();
 
 private:
-    int max;
+    int maxAge;
+    int sMaxAge;
     int content_length;
     string Etag;
     string line;
     string last_modified;
     time_t expire_time;
-    time_t response_time;
+    __attribute__((unused)) time_t response_time;
     bool no_cache;
+    time_t recv_time;
+    bool no_store;
+    bool is_private;
     bool chunked;
     const string response;
-    std::vector<char> response_raw_data;
-    void isChunk();
+
+public:
+    const string &getEtag() const;
+    int getMaxAge() const;
+    int getSMaxAge() const;
+    const string &getLastModified() const;
+    static bool findNotModified(std::string response);
+    time_t getExpireTime() const;
+    time_t getRecvTime() const;
+
+
+
 
 protected:
     void parseDate();
-    void parseMax();
+    void parseMaxAge();
+    void parseSMaxAge();
     void parseExpire();
     void parseCache();
     void parseEtag();
@@ -67,10 +80,14 @@ protected:
     void setRecvTime();
 
 public:
-    HTTPResponse(string response): response(response), response_raw_data({}) {
+    //TODO Check the default value if you don't find any filed. eg: if you cannot find Expire, you must not leave a default junk value outside
+    HTTPResponse(string response): response(response) {
+        this->maxAge = -1;
+        this->sMaxAge = -1;
         setRecvTime();
         parseDate();
-        parseMax();
+        parseMaxAge();
+        parseSMaxAge();
         parseExpire();
         parseCache();
         parseEtag();
