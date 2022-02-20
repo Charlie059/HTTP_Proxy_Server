@@ -69,9 +69,11 @@ public:
 
     static string recvAllResponse(Client client, string server_meg, int contentLength);
 
-    static bool revalidate(HTTPRequest &httpRequest, const HTTPResponse &parse, Client & client);
+    static bool revalidate(HTTPRequest &httpRequest, const HTTPResponse &parse, Client & client, void * req);
 
     static bool isFresh(time_t recv_time, const HTTPResponse &parse);
+
+    static void sendCache(const void *req, vector<char> &response_vec, HTTPResponse & response);
 };
 
 

@@ -70,14 +70,12 @@ void * ProxyService::handle(void * req) {
 
             // if the response is no-cache
             if(parse.isNoCache()){
-                bool result = revalidate(httpRequest, parse, client);
+                bool result = revalidate(httpRequest, parse, client, req);
                 if(result == true){ //use cache
                     // log use cache
                     writeLog("Use Cache with " + httpRequest.getline());
                     // return response to client
-                    const char * send_msg = response.data();
-                    send(((Request*)req)->getFd(), send_msg, response.size(), 0);
-                    close(((Request*)req)->getFd()); // close client connection
+                    sendCache(req, response, parse);
                     return nullptr;
                 }else{
                     handleGet(req, httpRequest, client);
@@ -91,7 +89,15 @@ void * ProxyService::handle(void * req) {
                     close(((Request*)req)->getFd()); // close client connection
                     return nullptr;
                 } else{
-                    handleGet(req, httpRequest, client);
+                    // TODO change the expire time
+                    writeLog(to_string(((Request*)req)->getRequestId()) + ": in cache, but expired at " + ((parse.getExpireTime() == 0) ? Time::getCurrentTime() : Time::convertTime(parse.getExpireTime())));
+                    bool result = revalidate(httpRequest, parse, client, req);
+                    if(result == true) { //use cache
+                        sendCache(req, response, parse);
+                        return nullptr;
+                    } else{
+                        handleGet(req, httpRequest, client);
+                    }
                 }
             }
             close(((Request*)req)->getFd()); // close client connection
@@ -99,6 +105,8 @@ void * ProxyService::handle(void * req) {
             return nullptr;
 
         }else{ // if not found in cache
+            // log not in cache
+            writeLog(to_string(((Request*)req)->getRequestId()) + ": not in cache");
             handleGet(req, httpRequest, client);
             close(((Request*)req)->getFd()); // close client connection
             client.close();
@@ -113,6 +121,13 @@ void * ProxyService::handle(void * req) {
     close(((Request*)req)->getFd()); // close client connection
     client.close();
     return nullptr;
+}
+
+void ProxyService::sendCache(const void *req, vector<char> &response_vec, HTTPResponse & response) {
+    const char * send_msg = response_vec.data();
+    send(((Request*)req)->getFd(), send_msg, response_vec.size(), 0);
+    writeLog(to_string(((Request*)req)->getRequestId()) + ": Responding\"" + response.getLine() + "\"" );
+    close(((Request*)req)->getFd()); // close client connection
 }
 
 /**
@@ -136,12 +151,17 @@ bool ProxyService::isFresh(time_t recv_time, const HTTPResponse &parse) {
 }
 
 /**
- * Revalidate the httpRequest
+ * Revalidate from the server
  * @param httpRequest
  * @param parse
+ * @param client
+ * @param req
  * @return
  */
-bool ProxyService::revalidate(HTTPRequest &httpRequest, const HTTPResponse &parse, Client & client) {
+bool ProxyService::revalidate(HTTPRequest &httpRequest, const HTTPResponse &parse, Client & client, void * req) {
+    // log the requires validation
+    writeLog(to_string(((Request*)req)->getRequestId()) + ": in cache, requires validation");
+
     string msg_to_send;
     if(!parse.getEtag().empty() && !parse.getLastModified().empty()){ //if etag and last-modified both exist
         msg_to_send = HTTPRequest::buildHTTPRequest(httpRequest.getline(), true, true, parse.getEtag(), parse.getLastModified());
@@ -152,10 +172,16 @@ bool ProxyService::revalidate(HTTPRequest &httpRequest, const HTTPResponse &pars
     } else{
         return false;
     }
+
+    // log the requesting
+    writeLog(to_string(((Request*)req)->getRequestId())+ ": Requesting \"" + httpRequest.getline() + "\" from " + httpRequest.gethost());
     // send message to server
     Client::trySendMessage(const_cast<char *>(msg_to_send.c_str()), client.getSocketFd());
     // recv message from server
     string res = recvResponse(client);
+    HTTPResponse httpResponse(res);
+    // log the received
+    writeLog(to_string(((Request*)req)->getRequestId())+ ": Received \"" + httpResponse.getLine() + "\" from " + httpRequest.gethost());
     if(HTTPResponse::findNotModified(res)) return true; // use cache
     else return false;
 }
@@ -169,7 +195,7 @@ bool ProxyService::revalidate(HTTPRequest &httpRequest, const HTTPResponse &pars
 int ProxyService::verifyHostServer(const void *req, const Client &client) {
     if(client.getErrorCode() == -1){
         // log error
-        writeLog("Invalid Request HOST: cannot get address info for host");
+        writeLog( to_string(((Request*)req)->getRequestId()) + ": ERROR Invalid Request HOST: cannot get address info for host");
         // Send the 400 code
         Server::trySendMessage(const_cast<char *>(HTTPResponse::buildResponse(400).c_str()), ((Request*)req)->getFd());
         close(((Request*)req)->getFd()); // close client side connection
@@ -193,7 +219,7 @@ int ProxyService::verifyRequest(const void *req, HTTPRequest &httpRequest) {
     } else if(httpRequest.gethost().empty()){
         logInfo = to_string(((Request*)req)->getRequestId()) + ": Invalid Request HOST";
     } else{
-        logInfo = to_string(((Request*)req)->getRequestId()) + ": \"" + httpRequest.gethost() + "\" from " + ((Request*)req)->getIpAddress() + " @ " + Time::getCurrentTime();
+        logInfo = to_string(((Request*)req)->getRequestId()) + ": \"" + httpRequest.getline() + "\" from " + ((Request*)req)->getIpAddress() + " @ " + Time::getCurrentTime();
         writeLog(logInfo);
         return 0;
     }
@@ -260,8 +286,10 @@ int ProxyService::handleConnect(void *req, HTTPRequest request, Client client) {
  * @return
  */
 int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
-    // send message to the server
+    // log the requesting
+    writeLog(to_string(((Request*)req)->getRequestId())+ ": Requesting \"" + request.getline() + "\" from " + request.gethost());
 
+    // send message to the server
     // TODO TEST
     if(Client::trySendMessage(const_cast<char *>(request.getRaw().c_str()), client.getSocketFd()) == -1) return -1;
 
@@ -273,12 +301,18 @@ int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
     if((server_msg = recvResponse(client)).empty()) return -1;
 
     // HTTPResponse parse and log
-    HTTPResponse httpResponse(server_msg); // TODO when call this HTTPResponse, assign a current time
-    writeLog(to_string(((Request*)req)->getRequestId())+": HTTPResponse \"" + httpResponse.getLine()  + Time::getCurrentTime());
+    HTTPResponse httpResponse(server_msg);
+    writeLog(to_string(((Request*)req)->getRequestId())+": Received \"" + httpResponse.getLine() + "\" from " + request.gethost());
+    // log the note
+    if(!httpResponse.findControl().empty()) writeLog(to_string(((Request*)req)->getRequestId())+": NOTE " + httpResponse.findControl());
+    writeLog(to_string(((Request*)req)->getRequestId())+": NOTE ETag:" + httpResponse.getEtag());
+    if(httpResponse.getExpireTime() != 0) writeLog(to_string(((Request*)req)->getRequestId())+": NOTE ExpireTime:" + Time::convertTime(httpResponse.getExpireTime()));
 
     // TODO cache
     // check if chunked data
     if(httpResponse.isChunked()){
+        // log the requesting
+        writeLog(to_string(((Request*)req)->getRequestId())+ ": not cacheable because is chunked data");
         handleChunked(req, client, server_msg);
         return 0;
     } else{
@@ -290,16 +324,18 @@ int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
         send(((Request*)req)->getFd(), send_msg, response_msg.size(), 0);
 
 
-        // TODO HTTPResponse::isCacheable()
         if(httpResponse.isCacheable() && request.getmethod() != "POST"){
             // Cache the Response
-            cache.put(request.getline(), std::make_pair(response_msg, httpResponse.getRecvTime()));
+           cache.put(request.getline(), std::make_pair(response_msg, httpResponse.getRecvTime()));
+
             // log info
-            string logInfo = to_string(((Request*)req)->getRequestId())+": Cached \"" + httpResponse.getLine()  + Time::getCurrentTime();
+            string logInfo;
+            if(httpResponse.isNoCache()) logInfo = to_string(((Request*)req)->getRequestId())+": cached, but requires re-validation";
+            else logInfo = to_string(((Request*)req)->getRequestId())+": cached, expired at " + ((httpResponse.getExpireTime() == 0) ? "NAN" : Time::convertTime(httpResponse.getExpireTime()));
             writeLog(logInfo);
+        }else{
+            writeLog(to_string(((Request*)req)->getRequestId())+ ": not cacheable because no-store or no-private ");
         }
-            //TODO httpResponse.set_response_raw_data
-            //TODO cache value -> httpResponse
 
         return 0;
     }

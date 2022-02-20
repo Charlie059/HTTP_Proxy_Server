@@ -12,13 +12,22 @@ class Time {
 public:
     Time(){};
 
-static string getCurrentTime(){
-    time_t now = time(0);
-    tm *tm_gmt=gmtime(&now);
-    char * curr=asctime(tm_gmt);
-    string currentTime(curr);
-    return currentTime;
-}
+    static string getCurrentTime(){
+        time_t now = time(0);
+
+        tm *tm_gmt=gmtime(&now);
+        char * curr=asctime(tm_gmt);
+        string currentTime(curr);
+        return currentTime;
+    }
+
+    static string convertTime(time_t timeTO) {
+        time_t now = timeTO - 0 + 3600;
+        tm *tm_gmt=localtime(&now);
+        char * curr=asctime(tm_gmt);
+        string currentTime(curr);
+        return currentTime;
+    }
 
     static time_t getCurrentTm(){
         time_t now = time(0);
