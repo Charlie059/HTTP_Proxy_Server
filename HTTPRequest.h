@@ -23,6 +23,7 @@ private:
     string host;
     string port;
     string method;
+    string line;
     void requireHostPort();
     void requireMethod();
     void requireline();
@@ -30,12 +31,16 @@ public:
     HTTPRequest(string request): raw(request){
         requireMethod();
         requireHostPort();
+        requireline();
     }
 
     string getRaw() const;
 
     string gethost(){
         return host;
+    }
+    string getline(){
+        return line;
     }
     string getport() {
         return port;

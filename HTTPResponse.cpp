@@ -24,6 +24,11 @@ TEST(HTTPResponseTest, test1){
 
 using namespace std;
 
+
+
+
+
+
 bool HTTPResponse::findNotModified(std::string response){
     size_t find_line = response.find("HTTP/1.1 304 Not Modified");
     if(find_line!=string::npos) return true;
@@ -39,14 +44,15 @@ bool HTTPResponse::findNotModified(std::string response){
 /**
  * Find date
  */
+
 void HTTPResponse::parseDate(){
     string response_temp = this->response;
     std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
     size_t find_date=response_temp.find("date: ");
     if(find_date!=string::npos){
-        size_t find_gmt=response_temp.find("\r\n",find_date+1);//TODO +1
+        size_t find_gmt=response_temp.find_first_of("\r\n",find_date+1);//TODO +1
         if(find_gmt!=string::npos){
-            string datetime=response_temp.substr(find_date+6,find_gmt-find_date-6); //TODO +6
+            string datetime=response.substr(find_date+6,find_gmt-find_date-6); //TODO +6
             tm mytime;
             strptime(datetime.c_str(),"%a, %d %b %Y %H:%M:%S", &mytime);
             response_time=mktime(&mytime);//TODO ???
@@ -71,8 +77,8 @@ void HTTPResponse::parseMaxAge(){
                 if (find_colon == string::npos) {
                     max_age=response.substr(find_max+8,len-8);
                 }
-                else max_age = response_temp.substr(find_max + 8, find_colon - find_max - 8);// TODO the magic value; invalid use of find_colon
-                max = atoi(max_age.c_str());
+                else max_age = response.substr(find_max + 8, find_colon - find_max - 8);// TODO the magic value; invalid use of find_colon
+                maxAge = atoi(max_age.c_str());
             }
         }
     }
@@ -86,7 +92,7 @@ void HTTPResponse::parseExpire(){
     if(expire_pos!=string::npos){
         size_t find_gmt=response_temp.find_first_of("\r\n",expire_pos+1);
         if(find_gmt!=string::npos){
-            string datetime=response_temp.substr(expire_pos+9,find_gmt-expire_pos-9); // TODO the magic value; invalid use of find_colon
+            string datetime=response.substr(expire_pos+9,find_gmt-expire_pos-9); // TODO the magic value; invalid use of find_colon
             tm mytime;
             strptime(datetime.c_str(),"%a, %d %b %Y %H:%M:%S", &mytime);
             expire_time=mktime(&mytime);
@@ -99,23 +105,46 @@ void HTTPResponse::parseExpire(){
 void HTTPResponse::parseCache(){
     string response_temp = this->response;
     std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
-    size_t no_cache=response_temp.find("no-cache");
-    if(no_cache==string::npos){
+    size_t cache=response_temp.find("no-cache");
+    if(cache==string::npos){
         no_cache=false;
     }else{
         no_cache=true;
     }
 }
 
+void HTTPResponse::parseStore(){
+    string response_temp = this->response;
+    std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
+    size_t store=response_temp.find("no-store");
+    if(store==string::npos){
+        no_store=false;
+    }else{
+        no_store=true;
+    }
+}
+
+void HTTPResponse::parsePrivate(){
+    string response_temp = this->response;
+    std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
+    size_t private_val=response_temp.find("private");
+    if(private_val==string::npos){
+        is_private=false;
+    }else{
+        is_private=true;
+    }
+}
+
+
 void HTTPResponse::parseEtag(){
     string response_temp = this->response;
     std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
-    size_t find_etag=response.find("etag: ");
+    size_t find_etag=response_temp.find("etag: ");
     if(find_etag==string::npos){
         Etag="";
     }else{
-        size_t end=response.find_first_of("\"",find_etag+7);
-        Etag=response.substr(find_etag+7,end-find_etag-7); // TODO fix end
+        size_t end=response_temp.find_first_of("\r\n",find_etag+1);
+        Etag=response.substr(find_etag+6,end-find_etag-6); // TODO fix end
     }
 }
 
@@ -126,16 +155,40 @@ void HTTPResponse::parsemodify(){
     if(find_etag==string::npos) {
         last_modified="";
     }else{
-        size_t end=response_temp.find("\r\n",find_etag+1);
-        last_modified=response_temp.substr(find_etag+15,end-find_etag-15); // TODO fix end
+        size_t end=response_temp.find_first_of("\r\n",find_etag+1);
+        last_modified=response.substr(find_etag+15,end-find_etag-15); // TODO fix end
     }
 }
+
+std::string HTTPResponse::findControl(){
+    string response_temp = this->response;
+    std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
+    size_t find_cache=response_temp.find("cache-control: ");
+    if(find_cache==string::npos){
+        return "";
+    }else{
+        size_t end=response_temp.find_first_of("\r\n",find_cache+1);
+        if(end!=string::npos){
+            string line=response.substr(find_cache,end-find_cache);
+            return line;
+        }else{
+            return "";
+        }
+    }
+}
+
 
 bool HTTPResponse::isChunked() const {
     return chunked;
 }
 
-const string &HTTPResponse::getLine() const {
+void HTTPResponse::requireline(){
+    size_t end=response.find_first_of("\r\n");
+    if(end!=string::npos){line=response.substr(0,end);}
+    else{line="";}
+}
+
+const string HTTPResponse::getLine() const {
     return line;
 }
 
@@ -143,11 +196,30 @@ const string &HTTPResponse::getLine() const {
 void HTTPResponse::parseContentLength() {
     string response_temp = this->response;
     std::transform(response_temp.begin(),response_temp.end(),response_temp.begin(),::tolower);
+    size_t find_etag=response_temp.find("content-length: ");
+    if(find_etag==string::npos) {
+        content_length=-1;
+    }else{
+        size_t end=response_temp.find_first_of("\r\n",find_etag+1);
+        string content_len=response_temp.substr(find_etag+16,end-find_etag-16);
+        content_length=std::stoi(content_len); // TODO try catch
+    }
 
 }
 
 int HTTPResponse::getContentLength() const {
     return content_length;
+}
+
+
+
+void HTTPResponse::isChunk() {
+    size_t pos;
+    if ((pos = this->response.find("chunked")) != std::string::npos) {
+        this->chunked = true;
+        return;
+    }
+    else this->chunked = false;
 }
 
 

@@ -28,11 +28,11 @@ using namespace std;
 class HTTPResponse{
 public:
     int getContentLength() const;
-    const string &getLine() const;
     bool isChunked() const;
     bool isNoCache() const;
     bool isNoStore() const;
     bool isPrivate() const;
+    const string getLine() const;
 
 /**
  * if response find no-store and private return false else return true
@@ -64,6 +64,7 @@ public:
     static bool findNotModified(std::string response);
     time_t getExpireTime() const;
     time_t getRecvTime() const;
+    string findControl();
 
 
 
@@ -74,10 +75,15 @@ protected:
     void parseSMaxAge();
     void parseExpire();
     void parseCache();
+    void parseStore();
     void parseEtag();
+    void parsePrivate();
     void parsemodify();
     void parseContentLength();
     void setRecvTime();
+    void requireline();
+    void isChunk();
+
 
 public:
     //TODO Check the default value if you don't find any filed. eg: if you cannot find Expire, you must not leave a default junk value outside
@@ -91,9 +97,12 @@ public:
         parseExpire();
         parseCache();
         parseEtag();
+        parseStore();
+        parsePrivate();
         parsemodify();
         parseContentLength();
         isChunk();
+        requireline();
     }
 
 

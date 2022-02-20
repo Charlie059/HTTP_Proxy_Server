@@ -57,6 +57,8 @@ void * ProxyService::handle(void * req) {
     // If current client request HEAD is CONNECT
     if(httpRequest.getmethod() == "CONNECT"){
         handleConnect(req, httpRequest, client);
+        // log tunnel closed
+        writeLog(to_string(((Request*)req)->getRequestId()) + ": Tunnel closed" );
     }
     else{ // else if POST or GET
         // TODO TEST
@@ -83,10 +85,8 @@ void * ProxyService::handle(void * req) {
             }else{
                 if(isFresh(recv_time, parse)){//checkFresh()
                     // log use cache
-                    writeLog("Use Cache with " + httpRequest.getline());
-                    const char * send_msg = response.data();
-                    send(((Request*)req)->getFd(), send_msg, response.size(), 0);
-                    close(((Request*)req)->getFd()); // close client connection
+                    writeLog(to_string(((Request*)req)->getRequestId()) + ": in cache, valid");
+                    sendCache(req, response, parse);
                     return nullptr;
                 } else{
                     // TODO change the expire time
@@ -215,9 +215,9 @@ int ProxyService::verifyHostServer(const void *req, const Client &client) {
 int ProxyService::verifyRequest(const void *req, HTTPRequest &httpRequest) {
     string logInfo;
     if(httpRequest.getmethod() != "CONNECT" && httpRequest.getmethod() != "POST" && httpRequest.getmethod() != "GET"){
-        logInfo = to_string(((Request*)req)->getRequestId()) + ": Invalid Request Method";
+        logInfo = to_string(((Request*)req)->getRequestId()) + ": ERROR Invalid Request Method";
     } else if(httpRequest.gethost().empty()){
-        logInfo = to_string(((Request*)req)->getRequestId()) + ": Invalid Request HOST";
+        logInfo = to_string(((Request*)req)->getRequestId()) + ": ERROR Invalid Request HOST";
     } else{
         logInfo = to_string(((Request*)req)->getRequestId()) + ": \"" + httpRequest.getline() + "\" from " + ((Request*)req)->getIpAddress() + " @ " + Time::getCurrentTime();
         writeLog(logInfo);
@@ -274,8 +274,43 @@ void ProxyService::writeLog(const std::string& logTo){
  * @return
  */
 int ProxyService::handleConnect(void *req, HTTPRequest request, Client client) {
+    // log the requesting
+    writeLog(to_string(((Request*)req)->getRequestId())+ ": Requesting \"" + request.getline() + "\" from " + request.gethost());
 
-    return 0;
+    send(((Request *) req)->getFd(), "HTTP/1.1 200 OK\r\n\r\n", 19, 0); //TODO change     Server::trySendMessage(const_cast<char *>(HTTPResponse::buildResponse(400).c_str()), ((Request*)req)->getFd());
+
+    // log responding the connect request
+    writeLog(to_string(((Request*)req)->getRequestId()) + ": Responding \"" + request.getline() + "\"");
+
+    int nfds = max(client.getSocketFd(),((Request *) req)->getFd()) + 1;
+    fd_set readfds;
+    while (true) {
+        FD_ZERO(&readfds);
+        FD_SET(((Request *) req)->getFd(), &readfds);
+        FD_SET(client.getSocketFd(), &readfds);
+        select(nfds, &readfds, NULL, NULL, NULL);
+
+        // TODO ref to the beej's book
+        int fd[2] = {client.getSocketFd(), ((Request *) req)->getFd()};
+        int len;
+        for (int i = 0; i < 2; i++) {
+            char mes[65536] = {0};
+            if (FD_ISSET(fd[i], &readfds)) {
+                len = recv(fd[i], mes, sizeof(mes), 0);
+                if (len <= 0) {
+                    close(((Request*)req)->getFd()); // close client side connection
+                    client.close(); // close server side connection
+                    return 0;
+                } else {
+                    if (send(fd[1 - i], mes, len, 0) <= 0) {
+                        close(((Request*)req)->getFd()); // close client side connection
+                        client.close(); // close server side connection
+                        return 0;
+                    }
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -292,9 +327,6 @@ int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
     // send message to the server
     // TODO TEST
     if(Client::trySendMessage(const_cast<char *>(request.getRaw().c_str()), client.getSocketFd()) == -1) return -1;
-
-    // log the request to the server
-    writeLog(to_string(((Request*)req)->getRequestId())+ ": Requesting \"" + request.gethost() + "\" from " + ((Request*)req)->getIpAddress() + " @ " + Time::getCurrentTime());
 
     // recv head message from the server
     string server_msg;
@@ -322,6 +354,7 @@ int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
         std::vector<char> response_msg(msg.begin(), msg.end());
         const char * send_msg = response_msg.data();
         send(((Request*)req)->getFd(), send_msg, response_msg.size(), 0);
+        writeLog(to_string(((Request*)req)->getRequestId())+ ": Responding \""+httpResponse.getLine()+"\"" );
 
 
         if(httpResponse.isCacheable() && request.getmethod() != "POST"){
@@ -339,8 +372,6 @@ int ProxyService::handleGet(void *req, HTTPRequest & request, Client client) {
 
         return 0;
     }
-
-
 }
 
 

@@ -6,6 +6,8 @@
 #define HTTP_PROXY_SERVER_TIME_H
 #include <iostream>
 #include <ctime>
+#include <time.h>
+#include <sstream>
 using namespace std;
 
 class Time {

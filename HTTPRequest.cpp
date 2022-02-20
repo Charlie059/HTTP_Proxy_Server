@@ -16,8 +16,10 @@ using namespace std;
 // TODO WARNING Case-insentitive
 //This function is uesd to get the host and port number
 void HTTPRequest::requireHostPort(){
+    string raw_temp = this->raw;
     //find the first index where "Host" appears
-    size_t find_host=raw.find("Host: "); //TODO size_t -1
+    std::transform(raw_temp.begin(),raw_temp.end(),raw_temp.begin(),::tolower);
+    size_t find_host=raw_temp.find("host: "); //TODO size_t -1
     if(find_host!=string::npos){
         string temp=raw_temp.substr(find_host+6);
         //find the first index where \r or \n appears
@@ -46,6 +48,7 @@ void HTTPRequest::requireHostPort(){
 }
 
 
+
 void HTTPRequest::requireMethod(){ // TODO Change find CONNECT GRT POST directly rather than find_first_of(" "), careful size_t = -1
     size_t find_connect=raw.find("CONNECT");
     size_t find_post=raw.find("POST");
@@ -67,6 +70,25 @@ void HTTPRequest::requireMethod(){ // TODO Change find CONNECT GRT POST directly
 string HTTPRequest::getRaw() const {
     return raw;
 }
+
+void HTTPRequest::requireline(){
+size_t end=raw.find_first_of("\r\n");
+if(end!=string::npos){line=raw.substr(0,end);}
+else{line="";}
+}
+
+std::string HTTPRequest::buildHTTPRequest(std::string headerLine, bool IfNoneMatch, bool IfModifiedSince, std::string Etag, std::string LastModified) {
+    std::string ans = headerLine + "\n";
+    if(IfNoneMatch){
+        ans +=  "If-None-Match: " + Etag  + "\n";
+    }
+    if(IfModifiedSince){
+        ans +=  "If-Modified-Since: " + LastModified  + "\n";
+    }
+    ans += "\r\n";
+    return ans;
+}
+
 
 //
 //// Test case 1: getport() method
